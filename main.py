@@ -1,10 +1,26 @@
+import os
 import nextcord
 from nextcord.ext import commands
-from nextcord import Interaction, SlashOption, Embed, Colour, ui
-from datetime import datetime, timezone
+from nextcord import Interaction, SlashOption, Embed, Colour, ui, TextStyle
+from flask import Flask
+from threading import Thread
 import logging
 import asyncio
 from functools import wraps
+from datetime import datetime
+
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot attivo."
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+Thread(target=run).start()
+
 
 RIABILITAZIONI_ID = 1212887541137809448 
 ASSEGNAZIONI_ID = 1077224605904818176  
@@ -12,47 +28,18 @@ ATTI_ID = 1077221214327689347
 CANALE_UDIENZA_ID = 1288481660299513886
 RUOLO_ID = 1075145554415341629
 
+
 intents = nextcord.Intents.default()
-intents.members = True
 intents.message_content = True
+intents.guilds = True
+intents.members = True
+
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', datefmt='%d/%m/%Y %H:%M:%S')
 
-
-@bot.event
-async def on_ready():
-    print(f"{bot.user} è online.")
-    bot.loop.create_task(cambia_stato())
-
-
-
-def logs():
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(interaction: Interaction, *args, **kwargs):
-            user = interaction.user
-            timestamp = datetime.utcnow().strftime('%d/%m/%Y %H:%M:%S')
-            logging.info(f"Comando eseguito da {user.display_name} (ID: {user.id}) alle {timestamp}")
-            return await func(interaction, *args, **kwargs)
-        return wrapper
-    return decorator
-
-def ruoli_ag():
-    ids_ruoli = [
-        1263135274863689829
-    ]
-
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(interaction: Interaction, *args, **kwargs):
-            if any(role.id in ids_ruoli for role in interaction.user.roles):
-                return await func(interaction, *args, **kwargs)
-            await interaction.response.send_message("Non hai i permessi per usare questo comando.", ephemeral=True)
-        return wrapper
-    return decorator
 
 async def cambia_stato():
     await bot.wait_until_ready()
@@ -68,6 +55,44 @@ async def cambia_stato():
         await bot.change_presence(activity=nextcord.Activity(type=nextcord.ActivityType.watching, name=stato_attuale))
         index += 1
         await asyncio.sleep(1800)
+
+
+def logs():
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(interaction: Interaction, *args, **kwargs):
+            user = interaction.user
+            timestamp = datetime.utcnow().strftime('%d/%m/%Y %H:%M:%S')
+            logging.info(f"Comando eseguito da {user.display_name} (ID: {user.id}) alle {timestamp}")
+            return await func(interaction, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def ruoli_ag():
+    ids_ruoli = [
+        1263135274863689829
+    ]
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(interaction: Interaction, *args, **kwargs):
+            if any(role.id in ids_ruoli for role in interaction.user.roles):
+                return await func(interaction, *args, **kwargs)
+            await interaction.response.send_message("Non hai i permessi per usare questo comando.", ephemeral=True)
+        return wrapper
+    return decorator
+
+
+@bot.event
+async def on_ready():
+    await bot.wait_until_ready()
+    try:
+        synced = await bot.tree.sync()
+        print(f"[DEBUG] Comandi slash sincronizzati: {len(synced)}")
+    except Exception as e:
+        print(f"[DEBUG] Errore sincronizzazione: {e}")
+    print(f"[DEBUG] Bot connesso come {bot.user}")
+    bot.loop.create_task(cambia_stato())
 
 
 
